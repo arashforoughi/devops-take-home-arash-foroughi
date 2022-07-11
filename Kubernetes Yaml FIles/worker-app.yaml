@@ -1,0 +1,33 @@
+## Worker-App Deployment ##
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  labels: 
+    app: worker
+  name: worker
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template: 
+    metadata: 
+      labels: 
+        app: worker
+    spec: 
+      containers: 
+      - image: 9354165450/example:workerapp
+        name: worker
+---
+## Worker-App Service ## 
+apiVersion: v1
+kind: Service
+metadata: 
+  labels: 
+    apps: worker
+  name: worker
+spec: 
+  clusterIP: None
+  selector: 
+    app: worker

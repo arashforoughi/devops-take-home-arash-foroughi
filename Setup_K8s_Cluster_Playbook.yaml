@@ -1,0 +1,144 @@
+################################################################################
+## File name        : Setup_K8s_Cluster_Playbook.yaml                         ##
+## Author           : Arash Foroughi                                          ##
+## Version          : v1.0                                                    ##
+## Created          : 2022-07-11                                              ##
+## Modified Time    :                                                         ##
+## Change records   :                                                         ##
+################################################################################
+
+########################################################
+## Iniatlize Kubernetes Cluster on Master-1 as Leader ##
+########################################################
+- name: STEP-1-Initialize Kubernetes Cluster on Master-1
+  hosts: kmaster1
+
+  tasks:
+    - name: Reset previous Kubernetes Cluster on this node
+      shell: "kubeadm reset -f"
+
+    - name: Remove Previous Configs
+      file:
+        state: absent
+        dest: $HOME/.kube/config
+
+    - name: Initialize Kubernetes Cluster on Master-1
+      shell: "kubeadm init --upload-certs --apiserver-advertise-address {{ ansible_default_ipv4.address }} --control-plane-endpoint {{ ansible_default_ipv4.address }}:6443 --pod-network-cidr 10.244.0.0/16"
+      register: results
+
+    - name: Save the Result of the command
+      local_action:
+        module: copy
+        content: "{{ results.stdout }}"
+        dest: /root/kubeadm_init_result_kmaster1.log
+        force: yes
+
+    - name: Add KUBECONFIG to root Bashrc
+      lineinfile:
+         path: /root/.bashrc
+         line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
+         backup: yes
+
+    - name: Defining KUBECONFIG with root user
+      shell: "export KUBECONFIG=/etc/kubernetes/admin.conf"
+
+##############################################
+## Send Kubernetes Config File to All Nodes ##
+##############################################
+- name: STEP-2-Send Kubernetes Config File to All Nodes
+  hosts: all
+
+  tasks: 
+    - name: Copy Kubernetes Config Files
+      copy:
+        src: /root/kubeadm_init_result_kmaster1.log
+        dest: /root/kubeadm_init_result_kmaster1.log
+        force: yes
+
+
+###################################################
+## Join Second Master Node to Kubernetes Cluster ##
+###################################################
+- name: STEP-3-Join Second Master Node to K8s Cluster
+  hosts: kmaster2
+
+  tasks:
+    - name: Reset previous Kubernetes Cluster on this node
+      shell: "kubeadm reset -f"
+
+    - name: Remove Previous Configs
+      file:
+        state: absent
+        dest: $HOME/.kube/config
+
+    - name: Grep the Master Join Command
+      shell: "tail -12 kubeadm_init_result_kmaster1.log | head -3"
+      register: results1
+
+    - name: Joining the Second Master Node to The Cluster
+      shell: "{{ results1.stdout }}"
+
+    - name: Add KUBECONFIG to root Bashrc
+      lineinfile:
+         path: /root/.bashrc
+         line: "mkdir -p $HOME/.kube; sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config; sudo chown $(id -u):$(id -g) $HOME/.kube/config"
+         backup: yes
+
+    - name: Defining KUBECONFIG with root user
+      shell: "mkdir -p $HOME/.kube; sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config; sudo chown $(id -u):$(id -g) $HOME/.kube/config"
+
+##################################################
+## Join First Worker Node to Kubernetes Cluster ##
+##################################################
+- name: STEP-4-Join First Worker Node to K8s Cluster
+  hosts: kworker1
+
+  tasks:
+    - name: Reset previous Kubernetes Cluster on this node
+      shell: "kubeadm reset -f"
+
+    - name: Remove Previous Configs
+      file:
+        state: absent
+        dest: $HOME/.kube/config
+
+    - name: Grep the Worker-1 Join Command
+      shell: "tail -2 /root/kubeadm_init_result_kmaster1.log"
+      register: results2
+
+    - name: Joining the First Worker Node to The Cluster
+      shell: "{{ results2.stdout }}"
+
+
+###################################################
+## Join Second Worker Node to Kubernetes Cluster ##
+###################################################
+- name: STEP-5-Join Second Worker Node to K8s Cluster
+  hosts: kworker2
+
+  tasks:
+    - name: Reset previous Kubernetes Cluster on this node
+      shell: "kubeadm reset -f"
+
+    - name: Remove Previous Configs
+      file:
+        state: absent
+        dest: $HOME/.kube/config
+
+    - name: Grep the Worker-2 Join Command
+      shell: "tail -2 /root/kubeadm_init_result_kmaster1.log"
+      register: results3
+
+    - name: Joining the Second Worker Node to The Cluster
+      shell: "{{ results3.stdout }}"
+
+
+#############################################
+## Deploy a Pod Network to the K8s Cluster ##
+#############################################
+- name: STEP-6-Deploy a Pod Network to the K8s Cluster
+  hosts: kmaster1
+
+  tasks: 
+    - name: Deploying Flannel Pod Network
+      shell: "export KUBECONFIG=/etc/kubernetes/admin.conf; kubectl apply -f https://github.com/coreos/flannel/raw/master/Documentation/kube-flannel.yml"

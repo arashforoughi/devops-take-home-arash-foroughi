@@ -1,0 +1,75 @@
+---
+## Postgres Database Deployment ##
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  labels:
+    app: db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+      - name: db
+        image: postgres:9.4
+        env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: postgres
+        ports:
+        - containerPort: 5432
+          name: db
+## Postgres Database Service ##
+--- 
+apiVersion: v1
+kind: Service
+metadata: 
+  labels: 
+    app: db
+  name: db
+spec: 
+  clusterIP: None
+  ports: 
+  - name: db
+    port: 5432
+    targetPort: 5432
+  selector: 
+    app: db
+## Postgres Persistent Volume ##
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv-volume
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/mnt/data"
+## Postgres Persistent Volume Claim ##
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pv-claim
+spec:
+  volumeMode: Filesystem
+  volumeName: postgres-pv-volume
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
