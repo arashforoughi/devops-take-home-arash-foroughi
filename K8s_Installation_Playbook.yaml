@@ -27,6 +27,7 @@
 ######################################################################################        
 ## This play will install docker as container runtime and confiure it on all nodes. ##
 ######################################################################################
+
 - name: STEP-2-Install Docker
   hosts: all
 
